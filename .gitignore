@@ -1,2 +1,6 @@
 .venv
 .env
+*.pyc
+__pycache__/
+chroma_db/
+.streamlit/secrets.toml

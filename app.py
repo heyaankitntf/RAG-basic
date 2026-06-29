@@ -95,6 +95,13 @@ def _groq_stream(prompt: str):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  GOOGLE / GEMINI — for embeddings (Groq has no embeddings API)
+# ═══════════════════════════════════════════════════════════════════════════════
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GEMINI_READY = bool(GOOGLE_API_KEY)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  PAGE CONFIG + CUSTOM CSS
 # ═══════════════════════════════════════════════════════════════════════════════
 st.set_page_config(
@@ -966,6 +973,51 @@ DATA_DIR.mkdir(exist_ok=True)
 CHROMA_DIR = Path("./chroma_db")
 
 
+def _ensure_writable(path: Path) -> None:
+    """
+    Recursively fix permissions on a directory tree so ChromaDB can write to it.
+
+    Fixes the common 'attempt to write a readonly database' (SQLite error 1032)
+    that happens when the chroma_db folder was created by a different user,
+    copied from a read-only source, or had restrictive perms applied to it.
+    """
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        path.chmod(0o755)
+        for root, dirs, files in os.walk(path):
+            for d in dirs:
+                try:
+                    Path(root, d).chmod(0o755)
+                except (PermissionError, OSError):
+                    pass
+            for f in files:
+                try:
+                    Path(root, f).chmod(0o644)
+                except (PermissionError, OSError):
+                    pass
+    except (PermissionError, OSError) as e:
+        print(f"[warn] Could not fix permissions on {path}: {e}")
+
+
+def _get_chroma_path() -> Path:
+    """
+    Return a writable path for ChromaDB.
+    Falls back to ~/.chroma_db_neuralrag if ./chroma_db is read-only.
+    """
+    primary = CHROMA_DIR
+    _ensure_writable(primary)
+    try:
+        sentinel = primary / ".write_test"
+        sentinel.write_text("ok", encoding="utf-8")
+        sentinel.unlink()
+        return primary
+    except (PermissionError, OSError):
+        fallback = Path.home() / ".chroma_db_neuralrag"
+        _ensure_writable(fallback)
+        print(f"[warn] {primary} is read-only — using fallback: {fallback}")
+        return fallback
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1033,7 +1085,7 @@ def _get_chunk_count() -> int:
     """Return the number of chunks in the ChromaDB collection (or 0 on failure)."""
     try:
         import chromadb
-        client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+        client = chromadb.PersistentClient(path=str(_get_chroma_path()))
         col = client.get_or_create_collection(name="my_knowledge_base")
         return col.count()
     except Exception:
@@ -1055,6 +1107,19 @@ def _ingest_files(uploaded_files):
 
 def _run_ingest(file_names: list[str]):
     """Actual ingestion pipeline — runs in the processing rerun."""
+    # ── Early API key check — fail fast with a clear message ──
+    if not GOOGLE_API_KEY:
+        st.error(
+            "\U0001f6a8 **GOOGLE_API_KEY is missing!**\n\n"
+            "Embeddings use Google Gemini (`gemini-embedding-001`) — Groq does "
+            "not offer an embeddings API. You MUST set `GOOGLE_API_KEY` in your "
+            "`.env` file even though you're using Groq for chat.\n\n"
+            "Get one at: https://aistudio.google.com/app/apikey\n"
+            "Then add this line to `.env`:\n"
+            "```\nGOOGLE_API_KEY=your_key_here\n```"
+        )
+        return
+
     import chromadb
     from langchain_community.document_loaders import UnstructuredMarkdownLoader
     from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -1072,8 +1137,8 @@ def _run_ingest(file_names: list[str]):
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = splitter.split_documents(docs)
 
-    # Embeddings still go through Gemini (Groq has no embeddings API)
-    client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+    # Embeddings via Gemini (Groq has no embeddings API)
+    client = genai.Client(api_key=GOOGLE_API_KEY)
     texts = [c.page_content for c in chunks]
     response = client.models.embed_content(
         model="models/gemini-embedding-001",
@@ -1081,7 +1146,7 @@ def _run_ingest(file_names: list[str]):
     )
     embeddings = [e.values for e in response.embeddings]
 
-    chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+    chroma_client = chromadb.PersistentClient(path=str(_get_chroma_path()))
     collection = chroma_client.get_or_create_collection(name="my_knowledge_base")
     start_id = collection.count()
     collection.add(
@@ -1109,7 +1174,7 @@ def _rag_answer(question: str):
     """
     from google import genai
 
-    google_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+    google_client = genai.Client(api_key=GOOGLE_API_KEY)
 
     # Embed question (still via Gemini — Groq has no embeddings endpoint)
     q_resp = google_client.models.embed_content(
@@ -1127,7 +1192,7 @@ def _rag_answer(question: str):
 
     # ── RETRIEVE FROM CHROMADB ──
     import chromadb
-    chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+    chroma_client = chromadb.PersistentClient(path=str(_get_chroma_path()))
     collection = chroma_client.get_or_create_collection(name="my_knowledge_base")
     results = collection.query(query_embeddings=[q_embedding], n_results=3)
     context = "\n\n---\n\n".join(results["documents"][0])
@@ -1256,8 +1321,22 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
 
+    # ── Gemini (Google) key status — required for embeddings ──
+    st.markdown("<div class=\"sidebar-section-title\">Gemini (Embeddings)</div>", unsafe_allow_html=True)
+    if GEMINI_READY:
+        st.markdown(
+            '<span class="status-pill ready"><span class="status-dot ready"></span>GOOGLE_API_KEY active</span>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<span class="status-pill empty"><span class="status-dot empty"></span>GOOGLE_API_KEY missing</span>',
+            unsafe_allow_html=True,
+        )
+        st.caption("\u26a0\ufe0f Required for embeddings. Get one at aistudio.google.com/app/apikey")
+
     # ── Groq key status ──
-    st.markdown("<div class=\"sidebar-section-title\">Groq API Keys</div>", unsafe_allow_html=True)
+    st.markdown("<div class=\"sidebar-section-title\">Groq (Chat LLM)</div>", unsafe_allow_html=True)
     if GROQ_API_KEY_1:
         st.markdown(
             '<span class="status-pill ready"><span class="status-dot ready"></span>KEY_1 active</span>',
@@ -1382,6 +1461,18 @@ if prompt := st.chat_input("Ask anything about your documents\u2026"):
                 "\u26a0\ufe0f **No Groq API keys configured.**\n\n"
                 "Set `GROQ_API_KEY_1` (and optionally `GROQ_API_KEY_2` for failover) "
                 "in your `.env` file, then restart the app."
+            )
+            st.markdown(answer)
+            st.markdown(_source_badge_html("system"), unsafe_allow_html=True)
+            st.session_state.messages.append(
+                {"role": "assistant", "content": answer, "source": "system"}
+            )
+        elif not GEMINI_READY:
+            answer = (
+                "\u26a0\ufe0f **GOOGLE_API_KEY is missing.**\n\n"
+                "Embeddings use Google Gemini — Groq has no embeddings API.\n"
+                "Add `GOOGLE_API_KEY=your_key` to your `.env` file.\n"
+                "Get one at: https://aistudio.google.com/app/apikey"
             )
             st.markdown(answer)
             st.markdown(_source_badge_html("system"), unsafe_allow_html=True)
