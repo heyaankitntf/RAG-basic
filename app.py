@@ -25,7 +25,8 @@ import numpy as np
 import redis
 
 try:
-    redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+    redis_host = os.getenv("REDIS_HOST", "localhost")
+    redis_client = redis.Redis(host=redis_host, port=6379, db=0, decode_responses=True)
     redis_client.ping()
     REDIS_AVAILABLE = True
 except Exception:

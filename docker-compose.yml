@@ -1,0 +1,31 @@
+services:
+  # 1. THE REDIS SERVICE
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    # No volume needed here because cache is temporary anyway!
+
+  # 2. YOUR STREAMLIT RAG APP
+  rag_app:
+    build: .  # Tells Docker to look for your Dockerfile
+    ports:
+      - "8501:8501" # Exposes Streamlit to your browser
+    environment:
+      # This passes the Redis container name to your Python code!
+      - REDIS_HOST=redis 
+      
+      # Pass your API keys securely from your .env file
+      - GROQ_API_KEY_1=${GROQ_API_KEY_1}
+      - GROQ_API_KEY_2=${GROQ_API_KEY_2}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.1-8b-instant}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    
+    volumes:
+      # This links your local 'chroma_db' folder to the container so data survives!
+      - ./chroma_db:/app/chroma_db
+      # This links your local 'data' folder so uploaded files save to your real computer!
+      - ./data:/app/data
+    
+    depends_on:
+      - redis  # Wait for Redis to start before starting the app
