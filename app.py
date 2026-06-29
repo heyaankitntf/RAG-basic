@@ -1,10 +1,10 @@
 """
-Neural RAG — a Streamlit chat app with:
+Sattva RAG — a Streamlit chat app with:
   • Dual Groq API keys (GROQ_API_KEY_1, GROQ_API_KEY_2) with automatic failover
   • Redis-backed semantic cache (fast cache-hit responses)
   • ChromaDB vector store (RAG retrieval from ingested .md files)
   • Source badge on every assistant reply: ⚡ From Cache  |  🗄️ From Database
-  • Modern dark UI with glassmorphism, violet accent palette
+  • Warm yoga-studio UI: sand, sage green, terracotta, humanist serif typography
 """
 
 import hashlib
@@ -105,8 +105,8 @@ GEMINI_READY = bool(GOOGLE_API_KEY)
 #  PAGE CONFIG + CUSTOM CSS
 # ═══════════════════════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Neural RAG",
-    page_icon="\U0001f9e0",
+    page_title="Sattva RAG",
+    page_icon="🌿",
     layout="centered",
     initial_sidebar_state="expanded",
 )
@@ -123,84 +123,96 @@ except Exception:
 st.markdown("""
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════════
-   NEURAL RAG — Light Glassmorphism Design System
+   SATTVA RAG — Warm Morning Light Design System
    ─────────────────────────────────────────────────────────────────────────────
-   Light mode only. Apple-inspired frosted glass over warm cream background
-   with colorful gradient blobs (so the blur has something to blur).
-   Violet/indigo accent. Refined typography. Soft layered shadows.
+   Yoga-studio aesthetic: warm sand, sage green, off-white.
+   Accents: terracotta and dusk pink.
+   Typography: Cormorant Garamond (humanist serif headings) + Source Sans 3 (body).
+   Background: subtle linen paper texture via SVG noise.
    ═══════════════════════════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Source+Sans+3:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ── Design Tokens ── */
 :root {
-    /* Surfaces */
-    --bg:               #faf9f6;
-    --surface:          #ffffff;
-    --surface-raised:   #ffffff;
-    --surface-glass:    rgba(255, 255, 255, 0.65);
-    --surface-glass-strong: rgba(255, 255, 255, 0.80);
-    --surface-hover:    rgba(124, 58, 237, 0.04);
+    /* Surfaces — warm sand & linen */
+    --bg:               #f5f0e8;
+    --surface:          #faf7f2;
+    --surface-raised:   #fdfbf7;
+    --surface-glass:    rgba(250, 247, 242, 0.72);
+    --surface-glass-strong: rgba(250, 247, 242, 0.90);
+    --surface-hover:    rgba(188, 108, 72, 0.05);
 
-    /* Borders */
-    --border:           rgba(15, 23, 42, 0.08);
-    --border-strong:    rgba(15, 23, 42, 0.12);
-    --border-glass:     rgba(255, 255, 255, 0.60);
-    --border-glow:      rgba(124, 58, 237, 0.35);
+    /* Borders — warm stone */
+    --border:           rgba(120, 100, 75, 0.12);
+    --border-strong:    rgba(120, 100, 75, 0.20);
+    --border-glass:     rgba(245, 238, 220, 0.70);
+    --border-glow:      rgba(188, 108, 72, 0.30);
 
-    /* Text */
-    --text-primary:     #0f172a;
-    --text-secondary:   #475569;
-    --text-tertiary:    #94a3b8;
+    /* Text — deep warm slate */
+    --text-primary:     #2c2417;
+    --text-secondary:   #6b5d4f;
+    --text-tertiary:    #a8957f;
 
-    /* Accent — violet/indigo */
-    --accent:           #7c3aed;
-    --accent-hover:     #6d28d9;
-    --accent-light:     #a78bfa;
-    --accent-muted:     rgba(124, 58, 237, 0.08);
-    --accent-secondary: #4f46e5;
-    --accent-gradient:  linear-gradient(135deg, #7c3aed 0%, #6366f1 55%, #3b82f6 100%);
+    /* Accent — terracotta primary, dusk pink secondary, sage green functional */
+    --accent:           #bc6c48;
+    --accent-hover:     #a05a38;
+    --accent-light:     #d4906e;
+    --accent-muted:     rgba(188, 108, 72, 0.09);
+    --accent-secondary: #c47a8a;
+    --accent-gradient:  linear-gradient(135deg, #bc6c48 0%, #c47a8a 55%, #b07aa0 100%);
+
+    /* Sage green — sidebar & functional elements */
+    --sage:             #7a9e87;
+    --sage-light:       #a8c4b0;
+    --sage-muted:       rgba(122, 158, 135, 0.12);
+    --sage-border:      rgba(122, 158, 135, 0.28);
 
     /* Source badges */
-    --cache:            #059669;
-    --cache-bg:         rgba(5, 150, 105, 0.10);
-    --cache-border:     rgba(5, 150, 105, 0.22);
-    --database:         #0284c7;
-    --database-bg:      rgba(2, 132, 199, 0.10);
-    --database-border:  rgba(2, 132, 199, 0.22);
-    --system:           #d97706;
-    --system-bg:        rgba(217, 119, 6, 0.10);
-    --system-border:    rgba(217, 119, 6, 0.22);
+    --cache:            #7a9e87;
+    --cache-bg:         rgba(122, 158, 135, 0.12);
+    --cache-border:     rgba(122, 158, 135, 0.28);
+    --database:         #6d8fa6;
+    --database-bg:      rgba(109, 143, 166, 0.12);
+    --database-border:  rgba(109, 143, 166, 0.28);
+    --system:           #bc6c48;
+    --system-bg:        rgba(188, 108, 72, 0.10);
+    --system-border:    rgba(188, 108, 72, 0.25);
 
     /* Status */
-    --success:          #059669;
-    --warning:          #d97706;
-    --error:            #dc2626;
+    --success:          #7a9e87;
+    --warning:          #bc6c48;
+    --error:            #b85050;
 
-    /* Shadows — Apple-style soft + layered, with glass inset highlight */
-    --shadow-1: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
-    --shadow-2: 0 2px 8px rgba(15, 23, 42, 0.05), 0 4px 16px rgba(15, 23, 42, 0.06);
-    --shadow-3: 0 8px 28px rgba(15, 23, 42, 0.10), 0 2px 8px rgba(15, 23, 42, 0.05);
-    --shadow-glow: 0 4px 20px rgba(124, 58, 237, 0.20), 0 1px 4px rgba(124, 58, 237, 0.10);
-    --inset-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.60);
+    /* Shadows — soft warm earth */
+    --shadow-1: 0 1px 3px rgba(44, 36, 23, 0.06), 0 1px 2px rgba(44, 36, 23, 0.04);
+    --shadow-2: 0 3px 12px rgba(44, 36, 23, 0.07), 0 1px 4px rgba(44, 36, 23, 0.05);
+    --shadow-3: 0 8px 32px rgba(44, 36, 23, 0.10), 0 2px 8px rgba(44, 36, 23, 0.06);
+    --shadow-glow: 0 4px 20px rgba(188, 108, 72, 0.18), 0 1px 4px rgba(188, 108, 72, 0.10);
+    --inset-highlight: inset 0 1px 0 rgba(255, 252, 245, 0.70);
 
-    /* Sidebar */
-    --sidebar-bg:        linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(250, 249, 246, 0.85) 100%);
-    --sidebar-surface:   rgba(15, 23, 42, 0.03);
-    --sidebar-border:    rgba(15, 23, 42, 0.08);
-    --sidebar-text:      #0f172a;
-    --sidebar-muted:     #94a3b8;
+    /* Sidebar — sage green tinted */
+    --sidebar-bg:        linear-gradient(180deg, #eef3ef 0%, #e8f0ea 100%);
+    --sidebar-surface:   rgba(122, 158, 135, 0.06);
+    --sidebar-border:    rgba(100, 140, 112, 0.18);
+    --sidebar-text:      #1e2e23;
+    --sidebar-muted:     #7a9e87;
 
-    /* Radii */
-    --r-sm: 8px;
-    --r-md: 12px;
-    --r-lg: 16px;
-    --r-xl: 22px;
+    /* Radii — softer, more organic */
+    --r-sm:   6px;
+    --r-md:   10px;
+    --r-lg:   16px;
+    --r-xl:   20px;
     --r-pill: 100px;
+
+    /* Typography */
+    --font-display: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    --font-body:    'Source Sans 3', 'Helvetica Neue', Arial, sans-serif;
+    --font-mono:    'JetBrains Mono', 'SF Mono', monospace;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   FORCE LIGHT THEME — override Streamlit's theme variables
+   FORCE WARM THEME — override Streamlit's theme variables
    ═══════════════════════════════════════════════════════════════════════════════ */
 :root,
 [data-theme="light"],
@@ -213,30 +225,38 @@ st.markdown("""
     --secondary-text-color:         var(--text-secondary) !important;
     --link-color:                   var(--accent-hover) !important;
     --code-color:                   var(--accent) !important;
-    --code-background-color:        #f1f5f9 !important;
+    --code-background-color:        rgba(120, 100, 75, 0.07) !important;
     --border-color:                 var(--border) !important;
     --widget-bg:                    var(--surface) !important;
-    --font:                         'Inter', -apple-system, sans-serif !important;
+    --font:                         'Source Sans 3', 'Helvetica Neue', sans-serif !important;
     --font-mono:                    'JetBrains Mono', 'SF Mono', monospace !important;
     --radius:                       16px !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   BASE — colorful gradient background so glass blur is visible
+   BASE — warm morning light, diagonal sunbeams, linen paper texture
    ═══════════════════════════════════════════════════════════════════════════════ */
 html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
 body, .stApp {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+    font-family: var(--font-body);
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Linen paper texture (SVG noise) + warm morning sunbeam orbs */
     background:
-        radial-gradient(ellipse 60% 50% at 12% 8%,  rgba(139, 92, 246, 0.18) 0%, transparent 50%),
-        radial-gradient(ellipse 55% 45% at 88% 15%, rgba(99, 102, 241, 0.14) 0%, transparent 50%),
-        radial-gradient(ellipse 70% 60% at 50% 95%, rgba(59, 130, 246, 0.10) 0%, transparent 55%),
-        radial-gradient(ellipse 40% 35% at 92% 85%, rgba(168, 85, 247, 0.12) 0%, transparent 50%),
-        radial-gradient(ellipse 35% 30% at 5% 70%,  rgba(236, 72, 153, 0.08) 0%, transparent 50%),
-        #faf9f6 !important;
+        /* diagonal sunbeam — top-left pour */
+        linear-gradient(118deg, rgba(255, 230, 180, 0.28) 0%, transparent 45%),
+        /* window light bloom — upper right */
+        radial-gradient(ellipse 70% 55% at 88% 5%,  rgba(255, 220, 150, 0.22) 0%, transparent 55%),
+        /* sage shadow — lower left corner */
+        radial-gradient(ellipse 50% 40% at 4% 92%,  rgba(122, 158, 135, 0.14) 0%, transparent 55%),
+        /* terracotta warmth — mid right */
+        radial-gradient(ellipse 40% 35% at 96% 60%, rgba(188, 108, 72, 0.07) 0%, transparent 50%),
+        /* dusk pink bloom — lower center */
+        radial-gradient(ellipse 60% 30% at 50% 100%, rgba(196, 122, 138, 0.07) 0%, transparent 55%),
+        /* linen base */
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E"),
+        #f5f0e8 !important;
     background-attachment: fixed !important;
 }
 .block-container {
@@ -252,7 +272,7 @@ body, .stApp {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   SIDEBAR — FIXED frosted glass panel (no collapse, always visible)
+   SIDEBAR — sage green frosted panel (no collapse, always visible)
    ═══════════════════════════════════════════════════════════════════════════════ */
 [data-testid="stSidebar"],
 section[data-testid="stSidebar"] {
@@ -270,10 +290,10 @@ section[data-testid="stSidebar"] {
     visibility: visible !important;
     background: var(--sidebar-bg) !important;
     border-right: 1px solid var(--sidebar-border) !important;
-    backdrop-filter: blur(24px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    backdrop-filter: blur(20px) saturate(150%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
     color: var(--sidebar-text) !important;
-    box-shadow: var(--shadow-3) !important;
+    box-shadow: 2px 0 24px rgba(44, 36, 23, 0.07) !important;
     z-index: 100 !important;
     overflow: hidden !important;
     transform: none !important;
@@ -371,24 +391,24 @@ section[data-testid="stSidebar"] > div {
 /* Upload dropzone */
 [data-testid="stSidebar"] [data-testid="stFileUploadDropzone"],
 [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
-    background: rgba(255, 255, 255, 0.5) !important;
-    border: 1.5px dashed rgba(124, 58, 237, 0.35) !important;
+    background: rgba(250, 247, 242, 0.55) !important;
+    border: 1.5px dashed var(--sage-border) !important;
     border-radius: var(--r-lg);
     padding: 1.4rem 1rem;
     transition: all 0.25s ease;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     box-shadow: var(--inset-highlight);
 }
 [data-testid="stSidebar"] [data-testid="stFileUploadDropzone"]:hover,
 [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"]:hover {
-    background: rgba(124, 58, 237, 0.06) !important;
-    border-color: rgba(124, 58, 237, 0.55) !important;
+    background: rgba(122, 158, 135, 0.08) !important;
+    border-color: var(--sage) !important;
     transform: translateY(-1px);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   HEADER — glass logo chip + gradient text
+   HEADER — organic logo chip + warm serif title
    ═══════════════════════════════════════════════════════════════════════════════ */
 .app-header {
     text-align: center;
@@ -406,54 +426,56 @@ section[data-testid="stSidebar"] > div {
     width: 50px;
     height: 50px;
     border-radius: 15px;
-    background: var(--accent-gradient);
+    background: linear-gradient(135deg, #bc6c48 0%, #c47a8a 60%, #7a9e87 100%);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1.45rem;
-    box-shadow: var(--shadow-glow), var(--inset-highlight);
+    box-shadow: 0 4px 18px rgba(188, 108, 72, 0.22), var(--inset-highlight);
     position: relative;
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.30);
+    border: 1px solid rgba(255, 252, 245, 0.35);
 }
 .app-logo::before {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%);
-    animation: shimmer 4s infinite;
+    background: linear-gradient(115deg, transparent 30%, rgba(255,252,245,0.30) 50%, transparent 70%);
+    animation: shimmer 5s infinite;
 }
 @keyframes shimmer {
     0%   { transform: translateX(-120%); }
     100% { transform: translateX(120%); }
 }
 .app-title {
-    font-size: 2.1rem;
-    font-weight: 700;
-    letter-spacing: -0.04em;
-    background: linear-gradient(135deg, #0f172a 0%, #7c3aed 60%, #6366f1 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-family: var(--font-display) !important;
+    font-size: 2.4rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
     line-height: 1;
+    /* No gradient clip — let the serif stand on its own */
 }
 .app-subtitle {
+    font-family: var(--font-body);
     color: var(--text-secondary);
-    font-size: 0.88rem;
+    font-size: 0.92rem;
     font-weight: 400;
     margin-top: 0.4rem;
-    letter-spacing: 0.005em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-style: italic;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   CHAT MESSAGES — frosted glass bubbles
+   CHAT MESSAGES — warm parchment & terracotta bubbles
    ═══════════════════════════════════════════════════════════════════════════════ */
 .stChatMessage {
     border-radius: var(--r-xl) !important;
     padding: 1rem 1.25rem !important;
     margin-bottom: 0.9rem !important;
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    backdrop-filter: blur(10px) saturate(130%);
+    -webkit-backdrop-filter: blur(10px) saturate(130%);
     transition: border-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
     box-shadow: var(--shadow-1), var(--inset-highlight) !important;
     border: 1px solid var(--border-glass) !important;
@@ -463,7 +485,7 @@ section[data-testid="stSidebar"] > div {
     box-shadow: var(--shadow-2), var(--inset-highlight) !important;
 }
 
-/* Assistant — frosted white glass with violet accent rail */
+/* Assistant — warm parchment with terracotta left rail */
 [data-testid="stChatMessageAssitant"],
 [data-testid="stChatMessage-assistant"] {
     background: var(--surface-glass) !important;
@@ -474,12 +496,13 @@ section[data-testid="stSidebar"] > div {
 [data-testid="stChatMessage-assistant"] p,
 [data-testid="stChatMessageAssitant"] li,
 [data-testid="stChatMessage-assistant"] li {
+    font-family: var(--font-body) !important;
     color: var(--text-primary) !important;
-    font-size: 0.95rem;
-    line-height: 1.7;
+    font-size: 0.96rem;
+    line-height: 1.8;
 }
 
-/* User — gradient bubble */
+/* User — terracotta-to-dusk-pink gradient */
 [data-testid="stChatMessageUser"],
 [data-testid="stChatMessage-user"] {
     background: var(--accent-gradient) !important;
@@ -491,9 +514,10 @@ section[data-testid="stSidebar"] > div {
 [data-testid="stChatMessage-user"] p,
 [data-testid="stChatMessageUser"] span,
 [data-testid="stChatMessage-user"] span {
-    color: #ffffff !important;
-    font-size: 0.95rem;
-    line-height: 1.7;
+    font-family: var(--font-body) !important;
+    color: #fdf8f4 !important;
+    font-size: 0.96rem;
+    line-height: 1.8;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -529,15 +553,15 @@ section[data-testid="stSidebar"] > div {
 .src-dot.system   { background: var(--system); }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   CHAT INPUT — frosted glass pill
+   CHAT INPUT — warm parchment pill
    ═══════════════════════════════════════════════════════════════════════════════ */
 [data-testid="stChatInputContainer"] {
     background: var(--surface-glass-strong) !important;
-    border: 1px solid var(--border-glass) !important;
+    border: 1.5px solid var(--border) !important;
     border-radius: var(--r-pill) !important;
     padding: 7px 8px !important;
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(14px) saturate(130%);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
     box-shadow: var(--shadow-2), var(--inset-highlight) !important;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -548,11 +572,12 @@ section[data-testid="stSidebar"] > div {
 [data-testid="stChatInputContainer"] textarea {
     color: var(--text-primary) !important;
     background: transparent !important;
-    font-family: inherit !important;
+    font-family: var(--font-body) !important;
     font-size: 0.95rem !important;
 }
 [data-testid="stChatInputContainer"] textarea::placeholder {
     color: var(--text-tertiary) !important;
+    font-style: italic;
 }
 [data-testid="stChatInputContainer"] button {
     background: var(--accent-gradient) !important;
@@ -573,29 +598,29 @@ section[data-testid="stSidebar"] > div {
    BUTTONS
    ═══════════════════════════════════════════════════════════════════════════════ */
 .stButton > button {
-    font-family: inherit !important;
+    font-family: var(--font-body) !important;
     font-size: 0.85rem !important;
     border-radius: var(--r-md) !important;
     padding: 0.5rem 1.2rem !important;
     font-weight: 500 !important;
-    letter-spacing: 0.005em;
+    letter-spacing: 0.02em;
     transition: all 0.2s ease !important;
 }
 .stButton > button[kind="primary"] {
     background: var(--accent-gradient) !important;
-    color: #ffffff !important;
+    color: #fdf8f4 !important;
     border: none !important;
     box-shadow: var(--shadow-glow), var(--inset-highlight) !important;
 }
 .stButton > button[kind="primary"]:hover {
     transform: translateY(-1px) !important;
-    box-shadow: 0 6px 24px rgba(124, 58, 237, 0.30), var(--inset-highlight) !important;
+    box-shadow: 0 6px 24px rgba(188, 108, 72, 0.28), var(--inset-highlight) !important;
 }
 .stButton > button[kind="primary"]:active { transform: translateY(0) !important; }
 .stButton > button[kind="secondary"] {
     background: var(--surface-glass) !important;
     color: var(--text-primary) !important;
-    border: 1px solid var(--border-glass) !important;
+    border: 1px solid var(--border) !important;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     box-shadow: var(--inset-highlight);
@@ -626,7 +651,7 @@ section[data-testid="stSidebar"] > div {
 }
 .status-pill.ready   { background: var(--cache-bg);     color: var(--success); border-color: var(--cache-border); }
 .status-pill.empty   { background: var(--system-bg);    color: var(--warning); border-color: var(--system-border); }
-.status-pill.loading { background: var(--accent-muted); color: var(--accent);  border-color: rgba(124, 58, 237, 0.22); }
+.status-pill.loading { background: var(--accent-muted); color: var(--accent);  border-color: rgba(188, 108, 72, 0.22); }
 .status-dot {
     width: 6px; height: 6px;
     border-radius: 50%;
@@ -678,7 +703,7 @@ section[data-testid="stSidebar"] > div {
 }
 .file-item:hover {
     background: var(--accent-muted);
-    border-color: rgba(124, 58, 237, 0.28);
+    border-color: rgba(188, 108, 72, 0.28);
 }
 .file-item .file-icon { flex-shrink: 0; }
 
@@ -702,7 +727,7 @@ section[data-testid="stSidebar"] > div {
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(124, 58, 237, 0.10) 0%, transparent 60%);
+    background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(188, 108, 72, 0.08) 0%, transparent 60%);
     pointer-events: none;
 }
 .welcome-icon {
@@ -713,17 +738,19 @@ section[data-testid="stSidebar"] > div {
     position: relative;
 }
 .welcome-card h3 {
+    font-family: var(--font-display) !important;
     color: var(--text-primary) !important;
-    font-size: 1.35rem;
-    font-weight: 600;
-    letter-spacing: -0.025em;
+    font-size: 1.55rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
     margin-bottom: 0.6rem;
     position: relative;
 }
 .welcome-card p {
+    font-family: var(--font-body) !important;
     color: var(--text-secondary) !important;
-    font-size: 0.92rem;
-    line-height: 1.7;
+    font-size: 0.93rem;
+    line-height: 1.8;
     max-width: 420px;
     margin: 0 auto;
     position: relative;
@@ -732,7 +759,7 @@ section[data-testid="stSidebar"] > div {
     display: inline-block;
     background: var(--accent-muted);
     color: var(--accent-hover);
-    border: 1px solid rgba(124, 58, 237, 0.22);
+    border: 1px solid rgba(188, 108, 72, 0.22);
     border-radius: 5px;
     padding: 1px 7px;
     font-size: 0.8rem;
@@ -795,15 +822,15 @@ section[data-testid="stSidebar"] > div {
 .stat-value.database { color: var(--database); }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   SCROLLBAR — slim violet
+   SCROLLBAR — slim terracotta
    ═══════════════════════════════════════════════════════════════════════════════ */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-    background: rgba(124, 58, 237, 0.25);
+    background: rgba(188, 108, 72, 0.22);
     border-radius: var(--r-pill);
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(124, 58, 237, 0.45); }
+::-webkit-scrollbar-thumb:hover { background: rgba(188, 108, 72, 0.42); }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    STREAMLIT CHROME CLEANUP — hide only specific widgets, NEVER stHeader
@@ -956,10 +983,10 @@ if "db_hits" not in st.session_state:
 st.markdown(
     '''<div class="app-header">
         <div class="app-logo-wrap">
-            <div class="app-logo">\U0001f9e0</div>
-            <span class="app-title">Neural RAG</span>
+            <div class="app-logo">🌿</div>
+            <span class="app-title">Sattva RAG</span>
         </div>
-        <div class="app-subtitle">Dual-key Groq \u2022 Semantic cache \u2022 ChromaDB retrieval</div>
+        <div class="app-subtitle">Dual-key Groq &bull; Semantic cache &bull; ChromaDB retrieval</div>
     </div>''',
     unsafe_allow_html=True,
 )
