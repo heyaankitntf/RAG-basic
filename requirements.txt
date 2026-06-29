@@ -1,0 +1,17 @@
+langchain
+langchain-google-genai
+google-genai
+langchain-community
+langchain-text-splitters
+chromadb
+pypdf
+python-dotenv
+
+unstructured
+markdown
+groq
+tenacity
+streamlit
+
+numpy
+redis

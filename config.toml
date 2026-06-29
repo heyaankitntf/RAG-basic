@@ -1,0 +1,16 @@
+# Streamlit configuration for Neural RAG.
+# Force light mode — the app uses a light-only glassmorphism design.
+
+[theme]
+base = "light"
+primaryColor = "#7c3aed"
+backgroundColor = "#faf9f6"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#0f172a"
+font = "sans serif"
+
+[server]
+maxUploadSize = 200
+
+[browser]
+gatherUsageStats = false
