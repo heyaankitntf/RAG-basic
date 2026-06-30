@@ -1,18 +1,10 @@
-"""
-Sattva RAG — a Streamlit chat app with:
-  • Dual Groq API keys (GROQ_API_KEY_1, GROQ_API_KEY_2) with automatic failover
-  • Redis-backed semantic cache (fast cache-hit responses)
-  • ChromaDB vector store (RAG retrieval from ingested .md files)
-  • Source badge on every assistant reply: ⚡ From Cache  |  🗄️ From Database
-  • Warm yoga-studio UI: sand, sage green, terracotta, humanist serif typography
-"""
-
 import hashlib
 import os
 import shutil
 from pathlib import Path
 
-import streamlit as st
+import numpy as np
+import redis
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -21,9 +13,6 @@ load_dotenv()
 # ═══════════════════════════════════════════════════════════════════════════════
 #  REDIS — semantic cache backend
 # ═══════════════════════════════════════════════════════════════════════════════
-import numpy as np
-import redis
-
 try:
     redis_host = os.getenv("REDIS_HOST", "localhost")
     redis_client = redis.Redis(host=redis_host, port=6379, db=0, decode_responses=True)
@@ -103,25 +92,9 @@ GEMINI_READY = bool(GOOGLE_API_KEY)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  PAGE CONFIG + CUSTOM CSS
+#  CUSTOM CSS (Kept for your frontend)
 # ═══════════════════════════════════════════════════════════════════════════════
-st.set_page_config(
-    page_title="Sattva RAG",
-    page_icon="🌿",
-    layout="centered",
-    initial_sidebar_state="expanded",
-)
-
-# Belt-and-suspenders: explicitly force the sidebar to be expanded. Some
-# Streamlit versions ignore initial_sidebar_state when the browser viewport
-# is narrow, and auto-collapse the sidebar. This option makes "expanded"
-# sticky regardless of viewport width.
-try:
-    st.set_option("client.showSidebarNavigation", True)
-except Exception:
-    pass  # older Streamlit versions don't have this option
-
-st.markdown("""
+CUSTOM_CSS = """
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════════
    SATTVA RAG — Warm Morning Light Design System
@@ -873,17 +846,12 @@ button[kind="header"] {
 [data-testid="stSpinner"] svg { color: var(--accent) !important; }
 
 </style>
-""", unsafe_allow_html=True)
+"""
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  JAVASCRIPT — force sidebar to stay open.
-#  CSS alone can't reliably override Streamlit's sidebar collapse logic across
-#  all versions, so we also manipulate the DOM directly via components.html().
-#  This runs in an iframe but accesses window.parent.document (same-origin).
+#  JAVASCRIPT — force sidebar to stay open. (Kept for your frontend)
 # ═══════════════════════════════════════════════════════════════════════════════
-import streamlit.components.v1 as components
-
-components.html("""
+SIDEBAR_JS = """
 <script>
 (function() {
     const doc = window.parent.document;
@@ -958,39 +926,33 @@ components.html("""
     setInterval(enforceFixedSidebar, 1500);
 })();
 </script>
-""", height=0)
+"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  SESSION STATE
+#  STATE (Replaces st.session_state so your helper functions don't break)
 # ═══════════════════════════════════════════════════════════════════════════════
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "ingested_files" not in st.session_state:
-    st.session_state.ingested_files = []
-if "db_ready" not in st.session_state:
-    st.session_state.db_ready = False
-if "processing" not in st.session_state:
-    st.session_state.processing = False
-if "cache_hits" not in st.session_state:
-    st.session_state.cache_hits = 0
-if "db_hits" not in st.session_state:
-    st.session_state.db_hits = 0
+state = {
+    "messages": [],
+    "ingested_files": [],
+    "db_ready": False,
+    "processing": False,
+    "cache_hits": 0,
+    "db_hits": 0,
+    "_pending_files": []
+}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  HEADER
+#  HEADER (Kept variable intact for your frontend)
 # ═══════════════════════════════════════════════════════════════════════════════
-st.markdown(
-    '''<div class="app-header">
-        <div class="app-logo-wrap">
-            <div class="app-logo">🌿</div>
-            <span class="app-title">Sattva RAG</span>
-        </div>
-        <div class="app-subtitle">Dual-key Groq &bull; Semantic cache &bull; ChromaDB retrieval</div>
-    </div>''',
-    unsafe_allow_html=True,
-)
+HEADER_HTML = '''<div class="app-header">
+    <div class="app-logo-wrap">
+        <div class="app-logo">🌿</div>
+        <span class="app-title">Sattva RAG</span>
+    </div>
+    <div class="app-subtitle">Dual-key Groq &bull; Semantic cache &bull; ChromaDB retrieval</div>
+</div>'''
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1128,16 +1090,16 @@ def _ingest_files(uploaded_files):
         with open(dest, "wb") as out:
             out.write(f.read())
         saved_names.append(f.name)
-    st.session_state._pending_files = saved_names
-    st.session_state.processing = True
-    st.rerun()
+    state["_pending_files"] = saved_names
+    state["processing"] = True
+    # st.rerun() removed
 
 
 def _run_ingest(file_names: list[str]):
     """Actual ingestion pipeline — runs in the processing rerun."""
     # ── Early API key check — fail fast with a clear message ──
     if not GOOGLE_API_KEY:
-        st.error(
+        print(
             "\U0001f6a8 **GOOGLE_API_KEY is missing!**\n\n"
             "Embeddings use Google Gemini (`gemini-embedding-001`) — Groq does "
             "not offer an embeddings API. You MUST set `GOOGLE_API_KEY` in your "
@@ -1159,7 +1121,7 @@ def _run_ingest(file_names: list[str]):
         docs.extend(loader.load())
 
     if not docs:
-        st.warning("No content extracted from the uploaded files.")
+        print("No content extracted from the uploaded files.")
         return
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
@@ -1184,11 +1146,11 @@ def _run_ingest(file_names: list[str]):
     )
 
     for fname in file_names:
-        if fname not in st.session_state.ingested_files:
-            st.session_state.ingested_files.append(fname)
-    st.session_state.db_ready = True
+        if fname not in state["ingested_files"]:
+            state["ingested_files"].append(fname)
+    state["db_ready"] = True
 
-    st.success(f"Ingested {len(chunks)} chunks from {len(file_names)} file(s).")
+    print(f"Ingested {len(chunks)} chunks from {len(file_names)} file(s).")
 
 
 def _rag_answer(question: str):
@@ -1255,11 +1217,11 @@ def _reset_db():
     """Wipe the ChromaDB and ingested-files list."""
     if CHROMA_DIR.exists():
         shutil.rmtree(CHROMA_DIR, ignore_errors=True)
-    st.session_state.db_ready = False
-    st.session_state.ingested_files = []
-    st.session_state.messages = []
-    st.session_state.cache_hits = 0
-    st.session_state.db_hits = 0
+    state["db_ready"] = False
+    state["ingested_files"] = []
+    state["messages"] = []
+    state["cache_hits"] = 0
+    state["db_hits"] = 0
 
 
 def _source_badge_html(source: str) -> str:
@@ -1285,265 +1247,3 @@ def _source_badge_html(source: str) -> str:
         '\u2699\ufe0f System'
         '</span>'
     )
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  SIDEBAR
-# ═══════════════════════════════════════════════════════════════════════════════
-with st.sidebar:
-    st.markdown("<div class=\"sidebar-section-title\">Knowledge Base</div>", unsafe_allow_html=True)
-    st.caption("Upload `.md` files to build your RAG knowledge base.")
-
-    uploaded = st.file_uploader(
-        "Drop markdown files here",
-        type=["md"],
-        accept_multiple_files=True,
-        key="md_uploader",
-        label_visibility="collapsed",
-    )
-
-    if uploaded:
-        st.markdown("<hr class=\"sidebar-divider\">", unsafe_allow_html=True)
-        st.markdown("<div class=\"sidebar-section-title\">Pending Files</div>", unsafe_allow_html=True)
-        for f in uploaded:
-            st.markdown(
-                f"<div class=\"file-item\"><span class=\"file-icon\">\U0001f4c4</span>{f.name}</div>",
-                unsafe_allow_html=True,
-            )
-
-        if st.button("\u26a1 Ingest Files", use_container_width=True, type="primary"):
-            _ingest_files(uploaded)
-
-    st.markdown("<hr class=\"sidebar-divider\">", unsafe_allow_html=True)
-
-    # ── DB Status ──
-    st.markdown("<div class=\"sidebar-section-title\">Database Status</div>", unsafe_allow_html=True)
-    chunk_count = _get_chunk_count()
-    if st.session_state.processing:
-        st.markdown(
-            '<span class="status-pill loading"><span class="status-dot loading"></span>Processing...</span>',
-            unsafe_allow_html=True,
-        )
-    elif chunk_count > 0:
-        st.session_state.db_ready = True
-        st.markdown(
-            f'<span class="status-pill ready"><span class="status-dot ready"></span>{chunk_count} chunks indexed</span>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            '<span class="status-pill empty"><span class="status-dot empty"></span>No data yet</span>',
-            unsafe_allow_html=True,
-        )
-
-    # ── Cache status ──
-    st.markdown("<div class=\"sidebar-section-title\">Cache (Redis)</div>", unsafe_allow_html=True)
-    if REDIS_AVAILABLE:
-        st.markdown(
-            '<span class="status-pill ready"><span class="status-dot ready"></span>Connected</span>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            '<span class="status-pill empty"><span class="status-dot empty"></span>Offline \u2014 cache disabled</span>',
-            unsafe_allow_html=True,
-        )
-
-    # ── Gemini (Google) key status — required for embeddings ──
-    st.markdown("<div class=\"sidebar-section-title\">Gemini (Embeddings)</div>", unsafe_allow_html=True)
-    if GEMINI_READY:
-        st.markdown(
-            '<span class="status-pill ready"><span class="status-dot ready"></span>GOOGLE_API_KEY active</span>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            '<span class="status-pill empty"><span class="status-dot empty"></span>GOOGLE_API_KEY missing</span>',
-            unsafe_allow_html=True,
-        )
-        st.caption("\u26a0\ufe0f Required for embeddings. Get one at aistudio.google.com/app/apikey")
-
-    # ── Groq key status ──
-    st.markdown("<div class=\"sidebar-section-title\">Groq (Chat LLM)</div>", unsafe_allow_html=True)
-    if GROQ_API_KEY_1:
-        st.markdown(
-            '<span class="status-pill ready"><span class="status-dot ready"></span>KEY_1 active</span>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            '<span class="status-pill empty"><span class="status-dot empty"></span>KEY_1 missing</span>',
-            unsafe_allow_html=True,
-        )
-    if GROQ_API_KEY_2:
-        st.markdown(
-            '<span class="status-pill ready"><span class="status-dot ready"></span>KEY_2 active (failover)</span>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            '<span class="status-pill empty"><span class="status-dot empty"></span>KEY_2 not configured</span>',
-            unsafe_allow_html=True,
-        )
-
-    # ── Ingested files list ──
-    if st.session_state.ingested_files:
-        st.markdown("<hr class=\"sidebar-divider\">", unsafe_allow_html=True)
-        st.markdown("<div class=\"sidebar-section-title\">Indexed Files</div>", unsafe_allow_html=True)
-        for fname in st.session_state.ingested_files:
-            st.markdown(
-                f"<div class=\"file-item\"><span class=\"file-icon\">\u2705</span>{fname}</div>",
-                unsafe_allow_html=True,
-            )
-
-    # ── Clear / Reset ──
-    st.markdown("<hr class=\"sidebar-divider\">", unsafe_allow_html=True)
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("\U0001f5d1 Clear Chat", use_container_width=True):
-            st.session_state.messages = []
-            st.session_state.cache_hits = 0
-            st.session_state.db_hits = 0
-            st.rerun()
-    with col2:
-        if st.button("\u26a0 Reset DB", use_container_width=True):
-            _reset_db()
-            st.rerun()
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  CHAT AREA
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# Welcome card + live stats when no messages yet
-if not st.session_state.messages:
-    st.markdown(
-        """
-        <div class="welcome-card">
-            <span class="welcome-icon">\U0001f4da</span>
-            <h3>Start a conversation</h3>
-            <p>Upload your <span class="kbd">.md</span> files using the sidebar,
-            click <span class="kbd">\u26a1 Ingest Files</span>, then ask anything
-            about your documents.</p>
-            <div class="welcome-hint-row">
-                <span class="welcome-hint">
-                    <span class="hint-dot" style="background: var(--cache);"></span>
-                    Cache = instant
-                </span>
-                <span class="welcome-hint">
-                    <span class="hint-dot" style="background: var(--database);"></span>
-                    Database = retrieved
-                </span>
-                <span class="welcome-hint">
-                    <span class="hint-dot" style="background: var(--accent);"></span>
-                    Dual Groq keys
-                </span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-else:
-    # Live stats row above the chat
-    total = len([m for m in st.session_state.messages if m["role"] == "assistant"])
-    st.markdown(
-        f"""
-        <div class="stat-row">
-            <div class="stat-card">
-                <div class="stat-label">Total Replies</div>
-                <div class="stat-value">{total}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">\u26a1 Cache Hits</div>
-                <div class="stat-value cache">{st.session_state.cache_hits}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">\U0001f5c4\ufe0f DB Hits</div>
-                <div class="stat-value database">{st.session_state.db_hits}</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-# Render chat history with source badges
-for msg in st.session_state.messages:
-    avatar = "\U0001f9e0" if msg["role"] == "assistant" else "\U0001f464"
-    with st.chat_message(msg["role"], avatar=avatar):
-        st.markdown(msg["content"])
-        # Show source badge only on assistant messages that have a source set
-        if msg["role"] == "assistant" and msg.get("source"):
-            st.markdown(_source_badge_html(msg["source"]), unsafe_allow_html=True)
-
-# Chat input
-if prompt := st.chat_input("Ask anything about your documents\u2026"):
-    # Add user message
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user", avatar="\U0001f464"):
-        st.markdown(prompt)
-
-    # Generate assistant answer
-    with st.chat_message("assistant", avatar="\U0001f9e0"):
-        if not GROQ_READY:
-            answer = (
-                "\u26a0\ufe0f **No Groq API keys configured.**\n\n"
-                "Set `GROQ_API_KEY_1` (and optionally `GROQ_API_KEY_2` for failover) "
-                "in your `.env` file, then restart the app."
-            )
-            st.markdown(answer)
-            st.markdown(_source_badge_html("system"), unsafe_allow_html=True)
-            st.session_state.messages.append(
-                {"role": "assistant", "content": answer, "source": "system"}
-            )
-        elif not GEMINI_READY:
-            answer = (
-                "\u26a0\ufe0f **GOOGLE_API_KEY is missing.**\n\n"
-                "Embeddings use Google Gemini — Groq has no embeddings API.\n"
-                "Add `GOOGLE_API_KEY=your_key` to your `.env` file.\n"
-                "Get one at: https://aistudio.google.com/app/apikey"
-            )
-            st.markdown(answer)
-            st.markdown(_source_badge_html("system"), unsafe_allow_html=True)
-            st.session_state.messages.append(
-                {"role": "assistant", "content": answer, "source": "system"}
-            )
-        elif not st.session_state.db_ready:
-            answer = (
-                "\u26a0\ufe0f **No knowledge base found.**\n\n"
-                "Please upload some `.md` files in the sidebar and click "
-                "**\u26a1 Ingest Files** first."
-            )
-            st.markdown(answer)
-            st.markdown(_source_badge_html("system"), unsafe_allow_html=True)
-            st.session_state.messages.append(
-                {"role": "assistant", "content": answer, "source": "system"}
-            )
-        else:
-            stream, source = _rag_answer(prompt)
-            answer = st.write_stream(stream)
-            st.markdown(_source_badge_html(source), unsafe_allow_html=True)
-
-            # Update counters
-            if source == "cache":
-                st.session_state.cache_hits += 1
-            elif source == "database":
-                st.session_state.db_hits += 1
-
-            st.session_state.messages.append(
-                {"role": "assistant", "content": answer, "source": source}
-            )
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  PROCESSING RERUN — runs the ingest pipeline when triggered
-# ═══════════════════════════════════════════════════════════════════════════════
-if st.session_state.processing:
-    with st.sidebar:
-        with st.spinner("Ingesting files\u2026"):
-            try:
-                _run_ingest(st.session_state.get("_pending_files", []))
-            except Exception as e:
-                st.error(f"Ingestion failed: {e}")
-            finally:
-                st.session_state.processing = False
-                st.session_state.pop("_pending_files", None)
