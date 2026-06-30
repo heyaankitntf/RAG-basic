@@ -1,0 +1,6 @@
+{
+  "name": "Lexicon Enterprise RAG",
+  "description": "An interactive enterprise RAG workspace with instant document indexing, semantic caching, dual-key failover monitoring, and secure custom analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
